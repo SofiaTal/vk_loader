@@ -5,10 +5,17 @@ from tqdm import tqdm
 from vk_api.vk_api import VkApiMethod
 
 USER_ID = ""
-USERNAME = "Tap here username of the user whose album you want to load"
-LOGIN = "Preferably to use phone number to deal with safety"
-PASSWORD = "Your password. Don't push it :)"
-ALBUM_ID = "If you keep it empty all albums will be loaded"  # https://vk.com/album2985314_241197273 в урле такого формата то, что идет после нижнего подчеркивания - id. ВАЖНО УКАЗАТЬ НУЖНОГО ПОЛЬЗОВАТЕЛЯ, альбом ищется из альбомов пользователя
+USERNAME = "Tap here username of the user whose album you want to load"  # Tap here username of the user whose album you want to load
+LOGIN = "Preferably to use phone number to deal with safety"  # Preferably to use phone number to deal with safety
+PASSWORD = "Your password. Don't push it :)"  # Your password. Don't push it :)
+ALBUM_ID = "We need int or title here!"  # https://vk.com/album2985314_241197273 в урле такого формата то, что идет после нижнего подчеркивания - id. ВАЖНО УКАЗАТЬ НУЖНОГО ПОЛЬЗОВАТЕЛЯ, альбом ищется из альбомов пользователя
+NEED_2FA_AUTH = False  # If you have 2FA - mark it as True
+
+
+# Авторизация
+def auth_handler():
+    key = input("Enter authentication code: ")
+    return key, True
 
 
 def get_user_id(vk_client: VkApiMethod, username: str):
@@ -37,15 +44,23 @@ def download_album_photos(album, user_name, vk_client: VkApiMethod) -> None:
     album_folder = album_folder.replace('"', ' ')
     os.makedirs(album_folder, exist_ok=True)
 
-    photos = vk_client.photos.get(owner_id=user_id, album_id=album['id'], extended=1)
-    for photo in tqdm(photos['items'], desc=f"Downloading {album_title}"):
-        url = photo['sizes'][-1]['url']
-        filename = f"{photo['id']}.jpg"
-        download_photo(url, album_folder, filename)
+    offset = 0
+    count = 100  # Максимально допустимое количество фотографий за один запрос
+    while True:
+        photos = vk_client.photos.get(owner_id=user_id, album_id=album['id'], extended=1, count=count, offset=offset)
+        if not photos['items']:
+            break
+
+        for photo in tqdm(photos['items'], desc=f"Downloading {album_title}"):
+            url = photo['sizes'][-1]['url']
+            filename = f"{photo['id']}.jpg"
+            download_photo(url, album_folder, filename)
+
+        offset += count
 
 
 # Скачивание фотографий из альбомов пользователя
-def download_user_photos(user_id: int, vk_client: VkApiMethod, album_id_or_title: str | None=None) -> None:
+def download_user_photos(user_id: int, vk_client: VkApiMethod, album_id_or_title: str | None = None) -> None:
     albums = vk_client.photos.getAlbums(owner_id=user_id)
     user_name = vk_client.users.get(user_ids=user_id)[0]["first_name"] + " " + vk_client.users.get(user_ids=user_id)[0]["last_name"]
     os.makedirs(user_name, exist_ok=True)
@@ -53,8 +68,8 @@ def download_user_photos(user_id: int, vk_client: VkApiMethod, album_id_or_title
     if album_id_or_title:
         # Скачивание только указанного альбома
         for album in albums['items']:
-            if album['id'] == album_id_or_title or album['title'] == album_id_or_title:
-                download_album_photos(album, user_name=user_name)
+            if album['title'] == album_id_or_title or album['id'] == int(album_id_or_title):
+                download_album_photos(album, user_name=user_name, vk_client=vk_client)
                 break
         else:
             print(f"Album {album_id_or_title} not found.")
@@ -101,6 +116,9 @@ def get_albums(user_id, vk_client: VkApiMethod):
 
 if __name__ == "__main__":
     vk_session = vk_api.VkApi(login=LOGIN, password=PASSWORD, app_id=6287487)
+    if NEED_2FA_AUTH:
+        vk_session.auth_handler = auth_handler
+
     vk_session.auth()
 
     vk = vk_session.get_api()
