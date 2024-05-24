@@ -18,6 +18,18 @@ def auth_handler():
     return key, True
 
 
+def captcha_handler(captcha):
+    """ При возникновении капчи вызывается эта функция и ей передается объект
+        капчи. Через метод get_url можно получить ссылку на изображение.
+        Через метод try_again можно попытаться отправить запрос с кодом капчи
+    """
+
+    key = input("Enter captcha code {0}: ".format(captcha.get_url())).strip()
+
+    # Пробуем снова отправить запрос с капчей
+    return captcha.try_again(key)
+
+
 def get_user_id(vk_client: VkApiMethod, username: str):
     response = vk_client.users.get(user_ids=username)
     if response:
@@ -115,9 +127,8 @@ def get_albums(user_id, vk_client: VkApiMethod):
 
 
 if __name__ == "__main__":
-    vk_session = vk_api.VkApi(login=LOGIN, password=PASSWORD, app_id=6287487)
-    if NEED_2FA_AUTH:
-        vk_session.auth_handler = auth_handler
+    auth_handler = auth_handler if NEED_2FA_AUTH else None
+    vk_session = vk_api.VkApi(login=LOGIN, password=PASSWORD, app_id=6287487, auth_handler=auth_handler, captcha_handler=captcha_handler)
 
     vk_session.auth()
 
